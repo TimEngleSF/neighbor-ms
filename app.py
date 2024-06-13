@@ -1,6 +1,5 @@
 import logging
 from aiohttp import web
-from dotenv import load_dotenv
 
 from routes import setup_routes
 from middleware import api_key_middleware, request_logger_middleware
@@ -19,7 +18,10 @@ async def init_app():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
     logger = logging.getLogger(__name__)
     logger.info("Starting...")
 
