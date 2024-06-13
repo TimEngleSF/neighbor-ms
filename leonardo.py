@@ -1,8 +1,14 @@
+import os
+import logging
+
 import aiohttp
 from aiohttp import web
 from pprint import pprint
+import aiofiles
 
-from config import LEONARDO_KEY
+from config import LEONARDO_KEY, PROCESSED_IMG_DIR
+
+logger = logging.getLogger(__name__)
 
 
 class LeonardoGeneration:
@@ -15,8 +21,8 @@ class LeonardoGeneration:
         self.img_url = None
         self.processed_img_url = None
 
-        self.filename = None
         self.processed_filename = None
+        self.processed_filepath = None
 
         self.payload = payload_template.copy()
         self.payload["prompt"] = self.prompt
@@ -67,6 +73,35 @@ class LeonardoGeneration:
                 parsed_response = await response.json()
                 self.bg_removal_id = parsed_response["sdNobgJob"]["id"]
                 return self.bg_removal_id
+
+    async def save_processed_img(self, session):
+        try:
+            # Request the processed image
+            async with session.get(self.processed_img_url, ssl=False) as response:
+                if response.status == 200:
+                    content = await response.read()
+                    # Generate filename and filepath for the processed image
+                    self.processed_filename = self.bg_removal_id + ".png"
+                    self.processed_filepath = os.path.join(
+                        PROCESSED_IMG_DIR, self.processed_filename
+                    )
+                    # Save the processed image to disk
+                    async with aiofiles.open(self.processed_filepath, "wb") as file:
+                        await file.write(content)
+                    logger.info(f"Processed image saved to {self.processed_filepath}")
+                else:
+                    raise Exception(
+                        f"Failed to download image, status code: {response.status}"
+                    )
+        except aiohttp.ClientError as e:
+            logger.error(f"Client error while downloading image: {e}")
+            raise
+        except OSError as e:
+            logger.error(f"File operation error while saving image: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+            raise
 
 
 payload_template = {

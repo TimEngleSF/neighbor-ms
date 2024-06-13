@@ -1,5 +1,6 @@
 import logging
 from aiohttp import web
+import aiohttp
 import json
 import asyncio
 
@@ -96,16 +97,31 @@ async def request_neighbor(request):
 
         # Retrieve and clean up the response data
         response_data = pending_requests.pop(leo.image_id, None)
+        leo.processed_img_url = response_data["image_url"]
         pending_events.pop(leo.bg_removal_id, None)
+
+        # Save the processed image
+        async with aiohttp.ClientSession() as session:
+            await leo.save_processed_img(session)
+
+        payload = {
+            "userId": response_data["userId"],
+            "neighborName": response_data["neighborName"],
+            "userPrompt": prompts["user"],
+            "leonardoPrompt": prompts["leonardo"],
+            "generatedPrompt": prompts["gpt"],
+            "imageUrl": leo.processed_img_url,
+            "imagePath": leo.processed_filepath,
+            "imageFilename": leo.processed_filename,
+            "leonardoImgData": response_data["image"],
+        }
 
         # Check for errors in the response data
         if "error" in response_data:
             return web.json_response({"error": response_data["error"]}, status=500)
 
         # Return a successful response with the response data
-        return web.json_response(
-            {"status": "success", "data": response_data}, status=201
-        )
+        return web.json_response({"status": "success", "data": payload}, status=201)
 
     except json.JSONDecodeError:
         # Handle JSON decoding errors
@@ -164,7 +180,7 @@ async def webhook_listener(request):
             if bg_removal_id in pending_events:
                 pending_events[bg_removal_id].set()
                 pending_requests[generation_id]["bg_removal_status"] = "complete"
-                pending_requests[generation_id]["image"] = image_url
+                pending_requests[generation_id]["image_url"] = image_url
                 logger.info(f"Received webhook data for bg removal id: {bg_removal_id}")
             else:
                 logger.warning(
