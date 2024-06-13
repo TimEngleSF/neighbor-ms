@@ -73,18 +73,19 @@ async def request_neighbor(request):
         await leo.generate_img()
 
         # Store the request and event
-        pending_requests[leo.id] = {
+        print("ID!!!!!!!!!!!!!!!!!!!!!!!", leo.generation_id)
+        pending_requests[leo.generation_id] = {
             "description": description,
             "userId": userId,
             "neighborName": neighborName,
         }
 
-        pending_events[leo.id] = asyncio.Event()
+        pending_events[leo.generation_id] = asyncio.Event()
         # Wait for the event to complete
-        await pending_events[leo.id].wait()
+        await pending_events[leo.generation_id].wait()
 
-        response_data = pending_requests.pop(leo.id, None)
-        pending_events.pop(leo.id, None)
+        response_data = pending_requests.pop(leo.generation_id, None)
+        pending_events.pop(leo.generation_id, None)
 
         if "error" in response_data:
             return web.json_response({"error": response_data["error"]}, status=500)
@@ -98,9 +99,9 @@ async def request_neighbor(request):
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
     finally:
-        if leo and leo.id in pending_requests:
-            pending_requests.pop(leo.id, None)
-            pending_events.pop(leo.id, None)
+        if leo and leo.generation_id in pending_requests:
+            pending_requests.pop(leo.generation_id, None)
+            pending_events.pop(leo.generation_id, None)
 
 
 async def webhook_listener(request):
@@ -110,6 +111,10 @@ async def webhook_listener(request):
         data = body["data"]["object"]
         imgage_data = data["images"][0]
         generation_id = imgage_data["generationId"]
+
+        print("data", data)
+        print("GENERATIONID", generation_id)
+        print("PENDING REQUESTS", request.app["pending_requests"])
 
         # Get the pending requests and events
         pending_requests = request.app["pending_requests"]

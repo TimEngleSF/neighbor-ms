@@ -9,7 +9,8 @@ from config import LEONARDO_KEY
 
 class LeonardoGeneration:
     def __init__(self, prompt: str):
-        self.id = None
+        self.generation_id = None
+        self.bg_removal_id = None
         self.prompt = prompt
 
         self.img_url = None
@@ -22,6 +23,9 @@ class LeonardoGeneration:
         self.payload["prompt"] = self.prompt
 
         self.generation_req_url = "https://cloud.leonardo.ai/api/rest/v1/generations"
+        self.bg_removal_req_url = (
+            "https://cloud.leonardo.ai/api/rest/v1/variations/nobg"
+        )
 
     # async func to request img generation from Leonardo
     async def generate_img(self) -> str:
@@ -40,8 +44,29 @@ class LeonardoGeneration:
                 # Parse data
                 parsed_response = await response.json()
                 sd_generation_job = parsed_response["sdGenerationJob"]
-                self.id = sd_generation_job["generationId"]
-                return self.id
+                self.generation_id = sd_generation_job["generationId"]
+                return self.generation_id
+
+    async def request_bg_removal(self) -> str:
+        print("Requesting background removal...")
+        headers = {
+            "accept": "application/json",
+            "content-type": "application/json",
+            "authorization": f"Bearer {LEONARDO_KEY}",
+        }
+
+        payload = {"id": self.generation_id}
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                self.bg_removal_req_url, json=payload, headers=headers, ssl=False
+            ) as response:
+                if response.status != 200:
+                    raise Exception("error in removing background from Leonardo")
+                # Parse data
+                parsed_response = await response.json()
+                pprint(parsed_response)
+                self.bg_removal_id = parsed_response["url"]
+                return self.bg_removal_id
 
 
 payload_template = {
