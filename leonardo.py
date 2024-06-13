@@ -1,6 +1,4 @@
 import aiohttp
-import asyncio
-import json
 from aiohttp import web
 from pprint import pprint
 
@@ -10,6 +8,7 @@ from config import LEONARDO_KEY
 class LeonardoGeneration:
     def __init__(self, prompt: str):
         self.generation_id = None
+        self.image_id = None
         self.bg_removal_id = None
         self.prompt = prompt
 
@@ -29,7 +28,6 @@ class LeonardoGeneration:
 
     # async func to request img generation from Leonardo
     async def generate_img(self) -> str:
-        print("Generating image...")
         headers = {
             "accept": "application/json",
             "content-type": "application/json",
@@ -48,24 +46,26 @@ class LeonardoGeneration:
                 return self.generation_id
 
     async def request_bg_removal(self) -> str:
-        print("Requesting background removal...")
         headers = {
             "accept": "application/json",
             "content-type": "application/json",
             "authorization": f"Bearer {LEONARDO_KEY}",
         }
 
-        payload = {"id": self.generation_id}
+        payload = {"id": self.image_id, "isVariation": False}
+
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 self.bg_removal_req_url, json=payload, headers=headers, ssl=False
             ) as response:
                 if response.status != 200:
-                    raise Exception("error in removing background from Leonardo")
+
+                    raise Exception(
+                        "Error in removing background from Leonardo",
+                    )
                 # Parse data
                 parsed_response = await response.json()
-                pprint(parsed_response)
-                self.bg_removal_id = parsed_response["url"]
+                self.bg_removal_id = parsed_response["sdNobgJob"]["id"]
                 return self.bg_removal_id
 
 

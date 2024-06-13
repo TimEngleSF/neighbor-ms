@@ -15,6 +15,7 @@ class GPTChat:
         self.leonardo_prompt = None
 
     async def set_gpt_description(self) -> None:
+        # Make a request to the OpenAI API to generate a description
         completion = self.client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -22,6 +23,7 @@ class GPTChat:
                 {"role": "user", "content": self.user_prompt},
             ],
         )
+        # Extract the generated description from the response
         self.gptDescription = completion.choices[0].message.content
 
     async def get_leonardo_prompt(self) -> str:
