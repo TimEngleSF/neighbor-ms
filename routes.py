@@ -1,17 +1,32 @@
 import logging
+import os
 from aiohttp import web
+import aiohttp
 import json
 import asyncio
+import aiofiles
+
 from uuid import uuid4
-
-
-from pprint import pprint
 
 
 from gptChat import GPTChat
 from leonardo import LeonardoGeneration
+from config import PREPROCESSED_IMG_DIR
+import time
 
 logger = logging.getLogger(__name__)
+
+
+async def download_image(session, url, filename, folder):
+    async with session.get(url, ssl=False) as response:
+        if response.status == 200:
+            content = await response.read()
+            file_path = os.path.join(folder, filename)
+            async with aiofiles.open(file_path, "wb") as file:
+                await file.write(content)
+            return file_path
+        else:
+            raise Exception(f"Failed to download image from {url}")
 
 
 async def request_neighbor(request):
@@ -86,6 +101,27 @@ async def request_neighbor(request):
         response_data = pending_requests.pop(leo.id, None)
         pending_events.pop(leo.id, None)
 
+        # save the png image from the url
+        leo.img_url = response_data["image"]["url"]
+        leo.filename = str(uuid4()) + ".png"
+
+        # download the image
+        async with aiohttp.ClientSession() as session:
+            leo.filepath = await download_image(
+                session, leo.img_url, leo.filename, PREPROCESSED_IMG_DIR
+            )
+
+        response_data["filename"] = leo.filename
+
+        # remove the background
+        start_time = time.time()
+        await leo.remove_bg()
+        end_time = time.time()
+
+        execution_time = end_time - start_time
+        logger.info(f"Background removal took {execution_time} seconds")
+
+        response_data["processed_filename"] = leo.processed_filename
         if "error" in response_data:
             return web.json_response({"error": response_data["error"]}, status=500)
 

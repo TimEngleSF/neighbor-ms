@@ -1,10 +1,13 @@
 import aiohttp
-import asyncio
-import json
+import aiofiles
 from aiohttp import web
-from pprint import pprint
+from rembg import remove as remove_background
+from PIL import Image
+from io import BytesIO
+import os
 
-from config import LEONARDO_KEY
+
+from config import LEONARDO_KEY, PROCESSED_IMG_DIR
 
 
 class LeonardoGeneration:
@@ -16,7 +19,10 @@ class LeonardoGeneration:
         self.processed_img_url = None
 
         self.filename = None
+        self.filepath = None
+
         self.processed_filename = None
+        self.processed_filepath = PROCESSED_IMG_DIR
 
         self.payload = payload_template.copy()
         self.payload["prompt"] = self.prompt
@@ -42,6 +48,32 @@ class LeonardoGeneration:
                 sd_generation_job = parsed_response["sdGenerationJob"]
                 self.id = sd_generation_job["generationId"]
                 return self.id
+
+    async def remove_bg(self):
+        try:
+            async with aiofiles.open(self.filepath, "rb") as f:
+                img = Image.open(BytesIO(await f.read()))
+                img = img.convert("RGB")
+                img = remove_background(img, alpha_matting=True)
+                self.processed_filename = self.filename.replace(
+                    ".png", "_processed.png"
+                )
+                self.processed_filepath = os.path.join(
+                    self.processed_filepath, self.processed_filename
+                )
+
+                # Save image to a byte stream
+                byte_stream = BytesIO()
+                img.save(byte_stream, format="PNG")
+                byte_stream.seek(0)
+
+                # Write the byte stream to a file asynchronously
+                async with aiofiles.open(
+                    self.processed_filepath, "wb"
+                ) as processed_file:
+                    await processed_file.write(byte_stream.getvalue())
+        except Exception as e:
+            raise Exception(f"Error removing background: {str(e)}")
 
 
 payload_template = {
