@@ -18,11 +18,24 @@ async def request_neighbor(request):
 
     try:
         data = await request.json()
+        expected_fields = {
+            "description",
+            "userId",
+        }
+        received_fields = set(data.keys())
 
-        # Validate the input
+        # Check for unexpected fields
+        unexpected_fields = received_fields - expected_fields
+        if unexpected_fields:
+            return web.json_response(
+                {
+                    "error": f"Unexpected fields in request: {', '.join(unexpected_fields)}"
+                },
+                status=422,
+            )
+
         description = data.get("description")
         userId = data.get("userId")
-        neighborName = data.get("neighborName")
 
         # Prepare prompts for GPT and Leonardo
         prompts = {
@@ -48,22 +61,12 @@ async def request_neighbor(request):
             return web.json_response(
                 {"error": "Invalid userId: 'userId' must be a string"}, status=422
             )
-        if not neighborName:
-            return web.json_response(
-                {"error": "Invalid neighborName: 'neighborName' is required"},
-                status=422,
-            )
-        if not isinstance(neighborName, str):
-            return web.json_response(
-                {"error": "Invalid neighborName: 'neighborName' must be a string"},
-                status=422,
-            )
 
         # Process user description with GPT to get a better prompt for Leonardo
         gpt = GPTChat(user_prompt=description)
-        gpt_description = await gpt.get_leonardo_prompt()
-        prompts["gpt"] = gpt_description
-        prompts["leonardo"] = prompts["leonardo"] + prompts["gpt"]
+        processed_prompt = await gpt.get_leonardo_prompt()
+        prompts["gpt"] = gpt.gptDescription.strip('"')
+        prompts["leonardo"] = processed_prompt
 
         # Request image generation from Leonardo
         leo = LeonardoGeneration(prompt=prompts["leonardo"])
@@ -73,7 +76,6 @@ async def request_neighbor(request):
         pending_requests[leo.generation_id] = {
             "description": description,
             "userId": userId,
-            "neighborName": neighborName,
             "bg_removal_status": None,
         }
 
@@ -106,14 +108,17 @@ async def request_neighbor(request):
 
         payload = {
             "userId": response_data["userId"],
-            "neighborName": response_data["neighborName"],
-            "userPrompt": prompts["user"],
-            "leonardoPrompt": prompts["leonardo"],
-            "generatedPrompt": prompts["gpt"],
-            "imageUrl": leo.processed_img_url,
-            "imagePath": leo.processed_filepath,
-            "imageFilename": leo.processed_filename,
-            "leonardoImgData": response_data["image"],
+            "prompt": {
+                "user": prompts["user"],
+                "gpt": prompts["gpt"],
+                "leonardo": prompts["leonardo"],
+            },
+            "image": {
+                "filename": leo.processed_filename,
+                "path": leo.processed_filepath,
+                "url": leo.processed_img_url,
+            },
+            "leonardoImageData": response_data["image"],
         }
 
         # Check for errors in the response data
@@ -121,7 +126,7 @@ async def request_neighbor(request):
             return web.json_response({"error": response_data["error"]}, status=500)
 
         # Return a successful response with the response data
-        return web.json_response({"status": "success", "data": payload}, status=201)
+        return web.json_response({"data": payload}, status=201)
 
     except json.JSONDecodeError:
         # Handle JSON decoding errors
@@ -131,13 +136,13 @@ async def request_neighbor(request):
         return web.json_response({"error": str(e)}, status=500)
     finally:
         # Clean up pending requests and events in case of an exception
-        if (
-            leo
-            and leo.generation_id in pending_requests
-            or leo.image_id in pending_requests
-        ):
-            pending_requests.pop(leo.generation_id, None)
-            pending_events.pop(leo.generation_id, None)
+        if leo:
+            if leo.generation_id and leo.generation_id in pending_requests:
+                pending_requests.pop(leo.generation_id, None)
+                pending_events.pop(leo.generation_id, None)
+            if leo.image_id and leo.image_id in pending_requests:
+                pending_requests.pop(leo.image_id, None)
+                pending_events.pop(leo.image_id, None)
 
 
 async def webhook_listener(request):
