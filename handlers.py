@@ -62,15 +62,19 @@ async def request_neighbor(request):
                 {"error": "Invalid userId: 'userId' must be a string"}, status=422
             )
 
-        # Process user description with GPT to get a better prompt for Leonardo
+        # Process user description with GPT to get a better prompt for Leonardo  # Process user description with GPT to get a better prompt for Leonardo
         gpt = GPTChat(user_prompt=description)
-        processed_prompt = await gpt.get_leonardo_prompt()
-        prompts["gpt"] = gpt.gptDescription.strip('"')
-        prompts["leonardo"] = processed_prompt
+        leo_prompt_task = gpt.get_leonardo_prompt()
 
-        # Request image generation from Leonardo
-        leo = LeonardoGeneration(prompt=prompts["leonardo"])
-        await leo.generate_img()
+        # Request image generation from Leonardo (async but dependent on GPT prompt)
+        leo = LeonardoGeneration(prompt=await leo_prompt_task)
+        generate_img_task = leo.generate_img()
+
+        await generate_img_task
+
+        prompts["gpt"] = gpt.gptDescription.strip('"')
+        prompts["leonardo"] = gpt.leonardo_prompt
+
 
         # Store the request details and initialize an asyncio.Event for the generation process
         pending_requests[leo.generation_id] = {

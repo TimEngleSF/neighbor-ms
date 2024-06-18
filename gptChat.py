@@ -28,7 +28,7 @@ class GPTChat:
 
     async def get_leonardo_prompt(self) -> str:
         await self.set_gpt_description()
-        self.leonardo_prompt = PROMPT_PREFIX + self.gptDescription
+        self.leonardo_prompt = PROMPT_PREFIX + self.gptDescription.strip('"')
         return self.leonardo_prompt
 
 
