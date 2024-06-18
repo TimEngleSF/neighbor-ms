@@ -1,6 +1,6 @@
 from openai import OpenAI
 
-from config import OPENAI_KEY
+from config import OPENAI_KEY, PROMPT_PREFIX
 
 
 client = OpenAI(api_key=OPENAI_KEY)
@@ -15,6 +15,7 @@ class GPTChat:
         self.leonardo_prompt = None
 
     async def set_gpt_description(self) -> None:
+        # Make a request to the OpenAI API to generate a description
         completion = self.client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -22,11 +23,12 @@ class GPTChat:
                 {"role": "user", "content": self.user_prompt},
             ],
         )
+        # Extract the generated description from the response
         self.gptDescription = completion.choices[0].message.content
 
     async def get_leonardo_prompt(self) -> str:
         await self.set_gpt_description()
-        self.leonardo_prompt = f"90's Disney 2D, medium torso shot, facing right, white background, full torso in frame, looking at camera, rustic, peppy, {self.gptDescription}"
+        self.leonardo_prompt = PROMPT_PREFIX + self.gptDescription.strip('"')
         return self.leonardo_prompt
 
 
